@@ -25,6 +25,120 @@ pytest -q
 
 Phase-specific tests live under `fase_*/` (e.g. `fase_omega_final/`). Each phase has its own `requirements.txt` if you need isolated runs.
 
+## Dashboard (local — recomendado no Windows)
+
+Operations dashboard (Streamlit) — monitor paper/shadow trades, 10 constitutional layers, audit log, and settings panel.
+
+**Requisitos:** Python 3.11+, virtualenv e deps do dashboard.
+
+```powershell
+cd C:\Users\USUÁRIO\Desktop\DOUG.AI
+python -m venv .venv
+.\.venv\Scripts\pip install -r requirements-dashboard.txt
+.\run_dashboard.ps1
+```
+
+Alternativa (CMD): `run_dashboard.cmd`
+
+Abra **http://localhost:8501** no navegador.
+
+O script define `PYTHONPATH` na raiz do projeto (necessário para `from dashboard...`) e ativa modo paper/demo.
+
+## Dashboard Docker (opcional)
+
+**Requirements:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) running on your machine.
+
+```powershell
+cd C:\Users\USUÁRIO\Desktop\DOUG.AI
+docker compose up --build
+```
+
+Open **http://localhost:8501** in your browser.
+
+| Path | Purpose |
+|------|---------|
+| `dashboard/app.py` | Streamlit UI (Overview, Layers, Operations, **Deriv Demo**, Settings, Council) |
+| `integrations/deriv_demo.py` | Cliente WebSocket Deriv — **somente conta demo** |
+| `data/audit_log.jsonl` | Volume-mounted operations log |
+| `data/settings.json` | Volume-mounted dashboard settings |
+| `data/deriv_status.json` | Último snapshot Deriv (saldo, ticks, candles) |
+| `scripts/run_preflight_demo.py` | Optional CLI demo log generator |
+| `scripts/test_deriv_demo.py` | Teste de conexão Deriv demo |
+
+Detached mode: `docker compose up -d --build` · Stop: `docker compose down`
+
+Worker Deriv opcional (refresh automático a cada 60s):
+
+```powershell
+docker compose --profile deriv up -d --build
+```
+
+Optional demo feed (outside Docker):
+
+```powershell
+python scripts/run_preflight_demo.py --once
+python scripts/run_preflight_demo.py --interval 15
+```
+
+## Deriv Demo Setup (conta virtual — sem dinheiro real)
+
+> Guia completo (demo → live): [`docs/DERIV_API_SETUP.md`](docs/DERIV_API_SETUP.md)
+
+Integração MVP com a [Deriv WebSocket API](https://api.deriv.com/) para **treino e simulação** em conta demo. O código **recusa** tokens de conta real (`is_virtual` / loginid `VRT*`).
+
+### 1. Criar token na Deriv (conta DEMO)
+
+1. Acesse [home.deriv.com/dashboard/home](https://home.deriv.com/dashboard/home) e faça login.
+2. No seletor de conta (canto superior), escolha **Conta demo** (saldo virtual, ex.: USD 10.000).
+3. Vá em **Configurações da conta** → **API token** → **Criar novo token**.
+4. Marque os escopos **Read** e **Trade** (apenas na demo — nunca use token de conta real aqui).
+5. Copie o token gerado (ele só aparece uma vez).
+
+Opcional: registre um `app_id` em [api.deriv.com](https://api.deriv.com/) ou use o público de testes `1089`.
+
+### 2. Configurar Doug.AI
+
+```powershell
+cd C:\Users\USUÁRIO\Desktop\DOUG.AI
+copy .env.example .env
+# Edite .env e cole: DERIV_API_TOKEN=seu_token_demo_aqui
+```
+
+Instale deps do dashboard (fora do Docker):
+
+```powershell
+pip install -r requirements-dashboard.txt
+python scripts/test_deriv_demo.py
+```
+
+Saída esperada (com token válido demo):
+
+```
+🔗 Conectando Deriv demo (app_id=1089)...
+✅ Conta DEMO: VRTCxxxxx | Saldo: 10000.00 USD
+   Tick R_100: ...
+   Tick cryBTCUSD: ...
+✅ Teste concluído — status salvo em data/deriv_status.json
+```
+
+### 3. Dashboard
+
+```powershell
+.\run_dashboard.ps1
+```
+
+Abra **http://localhost:8501** → menu lateral **Deriv Demo**. Mostra status, saldo demo, ticks, candles e sinais paper locais (sem ordens reais na Deriv).
+
+O token pode ficar em `.env` (recomendado, gitignored) ou em `data/settings.json` via painel — **nunca commite** o arquivo `.env`.
+
+### Segurança
+
+| Regra | Implementação |
+|-------|----------------|
+| Só conta demo | `authorize` → valida `is_virtual` / prefixo `VRT` |
+| Sem ordens reais | Apenas leitura de saldo/ticks/candles + sinais paper locais |
+| Token do usuário | Variável `DERIV_API_TOKEN` — nunca no repositório |
+
 ---
 
 # DOUG.AI (Doug.OS)

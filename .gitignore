@@ -48,6 +48,9 @@ secrets.json
 logs/
 *.sqlite
 *.db
+data/*.json
+data/*.jsonl
+!data/.gitkeep
 
 # OS
 .DS_Store

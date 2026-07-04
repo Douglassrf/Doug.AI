@@ -1,0 +1,35 @@
+services:
+  doug-dashboard:
+    build: .
+    container_name: doug-dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./missions:/app/missions:ro
+      - ./latest:/app/latest:ro
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DOUG_MODE: paper
+      DOUG_DATA_DIR: /app/data
+      DOUG_LATEST_DIR: /app/latest
+      DOUG_MISSIONS_DIR: /app/missions
+    restart: unless-stopped
+
+  doug-deriv-worker:
+    build: .
+    container_name: doug-deriv-worker
+    command: ["python", "scripts/deriv_worker.py"]
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DOUG_DATA_DIR: /app/data
+      DERIV_REFRESH_SEC: "60"
+    restart: unless-stopped
+    profiles:
+      - deriv
