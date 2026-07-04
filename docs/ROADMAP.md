@@ -1,0 +1,34 @@
+# Roadmap – Blocos 02 e 03
+
+Este roadmap lista as missões planejadas para o bloco 02 de desenvolvimento, começando após a conclusão da Missão 18.
+
+| Missão | Objetivo resumido | Entregáveis |
+| --- | --- | --- |
+| **19 – Config Center** | **Concluído.** Centro de configuração unificado criado (pesos dinâmicos, limites de risco, limiares de regimes, critérios de bloqueio e níveis de confiança).  Permite ajustar parâmetros sem modificar o código. | `MISSION_19_REPORT.md` e ZIP consolidado |
+| **20 – Advanced Test Suite** | **Concluído.** Criada uma suite de testes com cenários extremos (manipulação severa, liquidez falsa, drawdown/volatilidade extrema e eventos inesperados) que foi executada com sucesso. | `MISSION_20_REPORT.md` e ZIP consolidado |
+| **21 – Data Connector Layer** | **Concluído.** Foi criada uma camada de conectores unificada que opera em modo somente leitura.  Ela define uma classe base para conectores, um registrador `DataConnectorLayer` e um conector de preço mock para testes. | `MISSION_21_REPORT.md` e ZIP consolidado |
+| **22 – Forex Connector** | **Concluído.** Um conector de Forex foi implementado com cotações estáticas para seis pares principais, integrando‑se à camada de conectores. | `MISSION_22_REPORT.md` e ZIP consolidado |
+| **23 – Crypto Connector** | **Concluído.** Foi criado o `CryptoConnector` que fornece cotações estáticas para BTCUSD, ETHUSD, SOLUSD e outras criptos via `DataConnectorLayer`. | `MISSION_23_REPORT.md` e ZIP consolidado |
+| **24 – Market Memory v2** | **Concluído.** Foi criada a classe `ExperienceStore` que registra contextos, regimes, decisões, resultados e PnL em um banco SQLite, permitindo recuperar experiências similares. | `MISSION_24_REPORT.md` e ZIP consolidado |
+| **25 – Experience Probability Engine** | **Concluído.** Foi criada a classe `ProbabilityEngine` que consome experiências gravadas e calcula probabilidade de vitória, recorrência, confiança e uma recomendação baseada nos resultados. | `MISSION_25_REPORT.md` e ZIP consolidado |
+| **26 – Multi‑Asset Simulator** | **Concluído.** Foi criado o `MultiAssetSimulator` que gera séries sintéticas para Forex, metais preciosos e criptomoedas via random walk. | `MISSION_26_REPORT.md` e ZIP consolidado |
+| **27 – Learning Loop v1** | **Concluído.** Foi implementado o `LearningLoop`, que salva experiências, calcula probabilidades com o `ProbabilityEngine` e retorna métricas e recomendação para ajuste. | `MISSION_27_REPORT.md` e ZIP consolidado |
+
+## Bloco 03 (Missões 28–37)
+
+O bloco 03 tem como foco a unificação da inteligência on‑chain, macroeconômica, de notícias e a evolução do motor probabilístico, culminando na camada supervisora Brian Supreme e em uma camada de inteligência unificada.  Abaixo estão as missões planejadas:
+
+| Missão | Status/Objetivo resumido | Entregáveis |
+| --- | --- | --- |
+| **28 – On‑chain Intelligence Core** | **Concluída.** Criado pacote `doug_os/onchain` com `WhaleDetector`, `ExchangeFlowTracker`, `StablecoinTracker`, `WalletMonitor` e `OnChainEventRegistry`.  Todos operam em modo leitura e possuem testes específicos. | `MISSION_28_REPORT.md` e ZIP consolidado |
+| **29 – Whale Mirror Engine** | **Concluída.** Implementado o `WhaleMirrorEngine`, que acumula estatísticas de transações de baleias, calcula scores de influência normalizados e retorna as carteiras mais influentes.  Inclui testes que cobrem processamento e ranking de baleias. | `MISSION_29_REPORT.md` e ZIP consolidado |
+| **30 – Stablecoin Flow Intelligence** | **Concluída.** Foi implementado o `StablecoinFlowEngine` que monitora depósitos e retiradas de stablecoins (USDT, USDC, DAI, FDUSD) em exchanges, calcula fluxos líquidos e infere a pressão de compra/venda.  Testes verificam as classificações em diversos cenários. | `MISSION_30_REPORT.md` e ZIP consolidado |
+| **31 – Market Integrity v2** | **Concluída.** Foi criado o `MarketIntegrityV2Engine`, que recebe pontuações de spoofing, armadilhas de liquidez, falsos rompimentos e wash trading, calcula uma média ponderada e classifica o risco como “dangerous”, “warning” ou “ok”.  Testes cobrem cenários de risco alto, moderado e baixo. | `MISSION_31_REPORT.md` e ZIP consolidado |
+| **32 – Liquidity Risk Engine** | **Concluída.** Foi criado o `LiquidityRiskEngine`, que calcula uma pontuação de risco baseada na profundidade do livro de ofertas e no volume diário, classifica o risco em "collapse", "stress", "vacuum" ou "normal" e retorna um ajuste de confiança proporcional. | `MISSION_32_REPORT.md` e ZIP consolidado |
+| **33 – News Intelligence Servo** | **Concluído.** Implementado o `NewsIntelligenceServo`, que analisa listas de manchetes com `sentiment_score`, `impact_score` e `source_confidence`, calcula médias e emite BUY/SELL/HOLD.  Testes cobrem cenários positivos, negativos, neutros e de ausência de notícias. | `MISSION_33_REPORT.md` e ZIP consolidado |
+| **34 – Macro Economic Servo** | **Concluído.** Criado o `MacroEconomicServo`, que interpreta taxas de juros, inflação, payroll, CPI e decisões FOMC/BCE para emitir BUY/SELL/HOLD e calcular métricas de risco, confiança, evidência, entropia e realidade.  Testes cobrem cenários de inflação/juros altos, baixos e mistos. | `MISSION_34_REPORT.md` e ZIP consolidado |
+| **35 – Experience Probability Engine v2** | **Concluído.** Desenvolvido o `ProbabilityEngineV2`, que aplica pesos lineares crescentes às experiências, pondera por regime e calcula probabilidade, recorrência e confiança históricas.  Testes mostram que experiências recentes e regimes correspondentes têm maior peso. | `MISSION_35_REPORT.md` e ZIP consolidado |
+| **36 – Brian Supreme v1** | **Concluído.** Criada a classe `BrianSupremeV1` que audita coleções de `IntentVector`, detecta conflitos de direção e ações arriscadas, gera sugestões de ajuste e compila explicações compreensíveis.  Testes confirmam que conflitos e riscos são detectados. | `MISSION_36_REPORT.md` e ZIP consolidado |
+| **37 – Unified Intelligence Layer** | **Concluído.** Implementada a `UnifiedIntelligenceLayer`, que coleta sinais de todos os servos via DougBus, aplica o `IntelligenceCouncil` para decisão de consenso e encaminha os vetores ao `BrianSupremeV1` para auditoria.  Retorna o ciclo, os vetores, a decisão e o feedback do supervisor.  Testes demonstram a identificação de conflitos e a produção de decisões seguras. | `MISSION_37_REPORT.md`, `DOUG_OS_BLOCK03_COMPLETION_REPORT.md` e `DOUG_OS_M28_M37_CONSOLIDADO.zip` |
+
+Cada missão deve seguir as regras descritas: ler o ZIP da missão anterior, ler `MISSION_HISTORY`, atualizar `CURRENT_STATE`, atualizar `ROADMAP`, atualizar `OPEN_ISSUES`, gerar relatório e ZIP correspondente, sempre operando em modo seguro (sem ordens reais ou movimentação de dinheiro).
