@@ -1,6 +1,6 @@
 # Doug.AI v1.0 — AI Trading Operating System
 
-**Constitutional Trading** — 331 missions across phased evolution (missions 01–37 snapshots + fase XVI–XXI + omega final).
+**Constitutional Trading** — 332 missions across phased evolution (missions 01–37 snapshots + fase XVI–XXII + omega final).
 
 > **Disclaimer:** Doug.AI is research and educational software. It does **not** provide financial advice. All trading is paper/shadow mode by default — no real money, no live exchange orders. Use at your own risk.
 
@@ -65,6 +65,7 @@ Open **http://localhost:8501** in your browser.
 | `data/deriv_status.json` | Último snapshot Deriv (saldo, ticks, candles) |
 | `scripts/run_preflight_demo.py` | Optional CLI demo log generator |
 | `scripts/test_deriv_demo.py` | Teste de conexão Deriv demo |
+| `fase_xxii_cognitive_trading_loop/` | Cognitive Trading Loop: memória epistêmica SQLite, validação por similaridade, evolução genética controlada e supervisor de proteção para paper/shadow trading. |
 
 Detached mode: `docker compose up -d --build` · Stop: `docker compose down`
 
