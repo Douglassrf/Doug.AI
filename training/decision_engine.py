@@ -262,6 +262,15 @@ def decide_pair(
 
     scenario = detect_scenario(closes[-30:])
     price = closes[-1]
+
+    # CUSUM: deteccao de mudanca de regime mais rapida que esperar a janela
+    # fixa de detect_scenario "rolar" inteira. Nao substitui a classificacao
+    # de cenario (usada como esta em todo o resto do sistema/Playbook) — so
+    # da um alerta adicional de cautela quando o preco acabou de romper o
+    # padrao recente.
+    from training.volatility import regime_shift_alert
+
+    shift = regime_shift_alert(closes)
     votes: list[StrategyVote] = []
     buy_score = sell_score = 0.0
     best_bucket: tuple[float, int] | None = None  # (win_rate, trades) do melhor voto na direcao vencedora
@@ -368,6 +377,54 @@ def decide_pair(
         if new_level == "FICAR_DE_FORA":
             d.direction = "hold"
         d.stake_pct = 0.0
+
+    # Gestao de risco de PORTFOLIO (nao so por par isolado): kill-switch por
+    # drawdown agregado + veredito protetor por combinacao especifica, com
+    # base em resultados REAIS ja resolvidos (training/paper_ledger.py), nao
+    # so na estatistica agregada do Playbook. Isto roda DEPOIS do gate normal
+    # de proposito — so pode rebaixar uma OPERAR ja aprovada, nunca promover.
+    if d.level == "OPERAR":
+        from training.paper_ledger import (
+            equity_snapshot,
+            is_kill_switch_active,
+            record_open_position,
+            rolling_bucket_health,
+        )
+
+        if is_kill_switch_active():
+            d.level = "OBSERVAR"
+            d.stake_pct = 0.0
+            dd = equity_snapshot().get("drawdown_pct", 0.0)
+            d.reasons.append(
+                f"🛑 KILL-SWITCH ATIVO: drawdown agregado do paper trading em {dd:.1f}% passou do "
+                "limite. Operacao suspensa ate o capital se recuperar "
+                "(ver data/training/paper_equity.json)."
+            )
+        elif shift.get("shift_detected"):
+            d.level = "OBSERVAR"
+            d.stake_pct = 0.0
+            d.reasons.append(
+                f"📉 CUSUM: mudanca de regime detectada nos precos recentes (vol EWMA "
+                f"{shift.get('ewma_vol', 0.0)*100:.3f}%). O historico usado pra aprovar esta "
+                "operacao pode nao refletir mais o comportamento atual — rebaixado para OBSERVAR "
+                "ate o novo padrao se estabilizar."
+            )
+        elif best_bucket_strategy:
+            health = rolling_bucket_health(best_bucket_strategy, pair, scenario)
+            if health["tripped"]:
+                d.level = "OBSERVAR"
+                d.stake_pct = 0.0
+                d.reasons.append(
+                    f"⚠️ VEREDITO PROTETOR: {best_bucket_strategy} em {pair}/{scenario} perdeu "
+                    f"{health['losses']}/{health['n']} das ultimas operacoes reais resolvidas — "
+                    "possivel quebra de regime. Rebaixado para OBSERVAR ate estabilizar, mesmo "
+                    "com o Playbook ainda aprovando no agregado historico."
+                )
+            else:
+                record_open_position(
+                    pair=pair, scenario=scenario, strategy_id=best_bucket_strategy,
+                    direction=d.direction, entry=price, stake_pct=d.stake_pct,
+                )
 
     _log_decision(d)
     return d

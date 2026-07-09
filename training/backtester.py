@@ -53,6 +53,12 @@ class BucketStats:
     losses: int = 0
     trades: int = 0
     sum_move_pct: float = 0.0  # movimento % na direcao operada (positivo = a favor)
+    # Momentos 2o/3o/4o grau do movimento %, em torno de ZERO (nao da media) —
+    # permite computar variancia/skew/kurtosis via momentos brutos ao final,
+    # sem guardar cada trade individual (custa 3 floats a mais por bucket).
+    sum_sq_move_pct: float = 0.0
+    sum_cube_move_pct: float = 0.0
+    sum_quad_move_pct: float = 0.0
 
     @property
     def win_rate(self) -> float:
@@ -62,6 +68,51 @@ class BucketStats:
     def expectancy_pct(self) -> float:
         """Media do movimento % na direcao operada. >0 = vantagem real."""
         return self.sum_move_pct / self.trades if self.trades else 0.0
+
+    @property
+    def variance_pct(self) -> float:
+        """Variancia do movimento % (momentos centrais a partir de momentos brutos)."""
+        if self.trades < 2:
+            return 0.0
+        mean = self.expectancy_pct
+        m2 = self.sum_sq_move_pct / self.trades - mean**2
+        return max(m2, 0.0)
+
+    @property
+    def sharpe(self) -> float:
+        """Sharpe por trade (nao anualizado): vantagem / dispersao do resultado.
+
+        Duas estrategias podem ter o mesmo expectancy_pct mas uma delas ganha
+        pouco quase sempre e perde MUITO raramente (perfil de risco tipico de
+        CRASH/BOOM) — o Sharpe captura essa diferenca, expectancy sozinho nao."""
+        from training.stats_validation import sharpe_from_moments
+
+        return sharpe_from_moments(self.expectancy_pct, self.variance_pct)
+
+    @property
+    def skew(self) -> float:
+        from training.stats_validation import skewness_from_moments
+
+        if self.trades < 3:
+            return 0.0
+        mean = self.expectancy_pct
+        m3 = self.sum_cube_move_pct / self.trades - 3 * mean * self.variance_pct - mean**3
+        return skewness_from_moments(mean, self.variance_pct, m3)
+
+    @property
+    def kurtosis(self) -> float:
+        from training.stats_validation import kurtosis_from_moments
+
+        if self.trades < 4 or self.variance_pct <= 0:
+            return 3.0
+        mean = self.expectancy_pct
+        m4 = (
+            self.sum_quad_move_pct / self.trades
+            - 4 * mean * self.sum_cube_move_pct / self.trades
+            + 6 * mean**2 * self.sum_sq_move_pct / self.trades
+            - 3 * mean**4
+        )
+        return kurtosis_from_moments(self.variance_pct, m4)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -73,6 +124,9 @@ class BucketStats:
             "trades": self.trades,
             "win_rate": round(self.win_rate, 4),
             "expectancy_pct": round(self.expectancy_pct, 6),
+            "sharpe": round(self.sharpe, 4),
+            "skew": round(self.skew, 4),
+            "kurtosis": round(self.kurtosis, 4),
         }
 
 
@@ -152,7 +206,11 @@ def walk_forward_pair(
             else:
                 bucket.losses += 1
             move_pct = (exit_price - entry) / entry * 100.0
-            bucket.sum_move_pct += move_pct if direction == "buy" else -move_pct
+            signed_move = move_pct if direction == "buy" else -move_pct
+            bucket.sum_move_pct += signed_move
+            bucket.sum_sq_move_pct += signed_move**2
+            bucket.sum_cube_move_pct += signed_move**3
+            bucket.sum_quad_move_pct += signed_move**4
     return out
 
 
@@ -178,6 +236,14 @@ def run_backtest(
         fetched.append(pair)
 
     leaderboard_stats = {k: v.to_dict() for k, v in stats.items()}
+    # DSR (Deflated Sharpe Ratio): corrige cada bucket pelo numero TOTAL de
+    # combinacoes testadas neste lote (len(stats) buckets = "trials"). Sem
+    # isto, testar centenas de combinacoes garante que algumas parecam boas
+    # so por coincidencia estatistica (data snooping) — o DSR e a defesa
+    # contra isso, adicional ao gate de expectancy/confianca ja existente.
+    from training.stats_validation import annotate_with_dsr
+
+    leaderboard_stats = annotate_with_dsr(leaderboard_stats)
     total_trades = sum(v.trades for v in stats.values())
     total_wins = sum(v.wins for v in stats.values())
 
@@ -186,7 +252,7 @@ def run_backtest(
     for key, bucket in stats.items():
         gate = gate_decision("buy", key, leaderboard_stats)  # direcao generica: avalia o bucket
         if gate["would_operate"] and bucket.expectancy_pct > 0:
-            approved.append({**bucket.to_dict(), "gate": gate["reason"]})
+            approved.append({**leaderboard_stats[key], "gate": gate["reason"]})
     approved.sort(key=lambda r: (r["win_rate"], r["trades"]), reverse=True)
 
     ranked = sorted(

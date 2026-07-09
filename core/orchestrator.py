@@ -94,7 +94,20 @@ def run_orchestration_cycle(
     verbose: bool = True,
 ) -> dict[str, Any]:
     """Um ciclo completo das 4 camadas, para todos os pares, como UM SO sistema."""
+    from training.backtester import fetch_candles_sync
     from training.decision_engine import decide_pair, load_knowledge, load_playbook
+    from training.paper_ledger import equity_snapshot, resolve_pending_positions
+
+    # ANTES de decidir qualquer coisa neste ciclo: resolve posicoes OPERAR de
+    # ciclos anteriores cujo horizonte ja passou (training/paper_ledger.py).
+    # Sem isto o sistema nunca saberia se um OPERAR passado teria ganhado ou
+    # perdido de verdade — nao havia curva de capital nem drawdown agregado.
+    def _price_lookup(pair: str) -> float | None:
+        series = fetch_candles_sync(pair, count=2, granularity=granularity)
+        closes = [c["close"] for c in series if c.get("close")]
+        return closes[-1] if closes else None
+
+    resolved_trades = resolve_pending_positions(_price_lookup)
 
     # CAMADA 2 (uma vez por ciclo): conhecimento compartilhado
     backtest_stats, tick_stats = load_knowledge()
@@ -126,6 +139,7 @@ def run_orchestration_cycle(
     operar = [p for p in plans if p.decision == "OPERAR"]
     observar = [p for p in plans if p.decision == "OBSERVAR"]
     fora = [p for p in plans if p.decision == "FICAR_DE_FORA"]
+    equity = equity_snapshot()
 
     state = {
         "ran_at": datetime.now(timezone.utc).isoformat(),
@@ -133,6 +147,13 @@ def run_orchestration_cycle(
         "pairs_analisados": len(plans),
         "resumo": {"operar": len(operar), "observar": len(observar), "de_fora": len(fora)},
         "playbook_edges": len(playbook),
+        "portfolio_risco": {
+            "capital_pct": equity.get("equity_pct"),
+            "drawdown_pct": equity.get("drawdown_pct"),
+            "kill_switch_ativo": equity.get("kill_switch_active"),
+            "trades_resolvidos_total": equity.get("resolved_trades"),
+            "resolvidos_neste_ciclo": len(resolved_trades),
+        },
         "planos": [p.to_dict() for p in plans],
     }
     DATA.mkdir(parents=True, exist_ok=True)
@@ -140,6 +161,7 @@ def run_orchestration_cycle(
     with HISTORY_PATH.open("a", encoding="utf-8") as f:
         f.write(json.dumps({
             "ts": state["ran_at"], "resumo": state["resumo"],
+            "portfolio_risco": state["portfolio_risco"],
             "operar": [{"pair": p.pair, "regime": p.regime, "strat": p.best_strategy,
                         "conf": p.confidence, "stake": p.stake_pct} for p in operar],
         }, ensure_ascii=False) + "\n")
@@ -148,6 +170,10 @@ def run_orchestration_cycle(
         print(f"[Torre de Controle] {len(plans)} pares · "
               f"OPERAR {len(operar)} | OBSERVAR {len(observar)} | DE FORA {len(fora)} "
               f"· Playbook: {len(playbook)} edges")
+        ks = " · 🛑 KILL-SWITCH ATIVO" if equity.get("kill_switch_active") else ""
+        print(f"  💰 Capital paper: {equity.get('equity_pct', 100.0):.2f}% · "
+              f"drawdown {equity.get('drawdown_pct', 0.0):.2f}% · "
+              f"{len(resolved_trades)} resolvidos neste ciclo (total {equity.get('resolved_trades', 0)}){ks}")
         for p in operar:
             print(f"  🟢 OPERAR {p.pair} [{p.regime}] {p.direction.upper()} · "
                   f"{p.best_strategy} {(p.best_edge or 0)*100:.0f}% · conf {(p.confidence or 0)*100:.0f}% · stake {p.stake_pct}%")

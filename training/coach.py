@@ -579,10 +579,16 @@ class TrainingCoach:
             expectancy = b.get("expectancy_pct")
             if expectancy is None or expectancy <= 0:
                 continue
+            # DSR (Deflated Sharpe Ratio): passa junto por transparencia — mostra
+            # se este edge sobrevive a correcao estatistica pelo numero de
+            # combinacoes testadas no lote (protecao contra data snooping). O
+            # gate de OPERAR (decision_engine.py) e quem efetivamente barra
+            # edges com DSR baixo antes de arriscar stake; aqui so anota.
+            dsr = b.get("dsr")
             edges.append({
                 "strategy_id": b.get("strategy_id"), "scenario": b.get("scenario"),
                 "pair": b.get("pair"), "win_rate": wr, "trades": b.get("trades"),
-                "expectancy_pct": expectancy,
+                "expectancy_pct": expectancy, "dsr": dsr,
                 "nivel": "ELITE" if wr >= self.EDGE_BAR else "BOM",
             })
         edges.sort(key=lambda e: (e["win_rate"], e["trades"]), reverse=True)

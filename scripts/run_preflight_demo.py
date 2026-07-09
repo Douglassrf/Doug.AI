@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from dashboard.data_store import append_audit_entry, load_settings  # noqa: E402
+from dashboard.data_store import DEMO_AUDIT_LOG_PATH, append_audit_entry, load_settings  # noqa: E402
 
 ASSETS = ["BTC/USDT", "ETH/USDT", "EUR/USD", "GOLD", "SOL/USDT", "GBP/USD", "XRP/USDT"]
 ACTIONS = ["BUY", "SELL", "HOLD"]
@@ -25,8 +25,12 @@ def generate_once(mode: str = "PAPER") -> None:
     layer_score = int(confidence * 100 + rng.uniform(-10, 10))
     layer_score = max(20, min(98, layer_score))
     rt = rng.choice(RED_TEAM) if action == "BUY" else "—"
+    # Grava em arquivo SEPARADO do audit_log real — este script gera dados
+    # 100% sinteticos, nunca deve ficar indistinguivel de uma decisao real
+    # (achado real 2026-07-10: 363 entradas fabricadas contaminaram o log
+    # real antes desta correcao).
     append_audit_entry(
-        "trade_decision",
+        "demo_trade_decision",
         {
             "asset": rng.choice(ASSETS),
             "action": action,
@@ -35,7 +39,9 @@ def generate_once(mode: str = "PAPER") -> None:
             "red_team": rt,
             "layer_score": layer_score,
             "cycle_id": f"cyc_{rng.randbytes(3).hex()}",
+            "synthetic": True,
         },
+        path=DEMO_AUDIT_LOG_PATH,
     )
     print(f"[demo] {action} entry appended (layer_score={layer_score})")
 

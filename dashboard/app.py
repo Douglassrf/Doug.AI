@@ -11,7 +11,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from dashboard.data_store import append_audit_entry, load_settings, read_audit_log, save_settings
+from dashboard.data_store import (
+    DEMO_AUDIT_LOG_PATH,
+    append_audit_entry,
+    load_settings,
+    read_audit_log,
+    save_settings,
+)
 from dashboard.decision_panel import page_decisions
 from dashboard.deriv_panel import page_deriv_demo
 from dashboard.preflight_bridge import (
@@ -75,8 +81,10 @@ def _maybe_demo_tick(settings: dict) -> None:
         rng = random.Random(int(now))
         action = rng.choice(["BUY", "SELL", "HOLD"])
         conf = round(rng.uniform(0.5, 0.9), 2)
+        # Grava em arquivo SEPARADO do audit_log real (path=DEMO_AUDIT_LOG_PATH)
+        # — nunca deve ficar indistinguivel de uma decisao real do Doug.AI.
         append_audit_entry(
-            "trade_decision",
+            "demo_trade_decision",
             {
                 "asset": rng.choice(["BTC/USDT", "ETH/USDT", "EUR/USD", "GOLD"]),
                 "action": action,
@@ -85,7 +93,9 @@ def _maybe_demo_tick(settings: dict) -> None:
                 "red_team": rng.choice(["PASS", "—", "REDUCE"]) if action == "BUY" else "—",
                 "layer_score": int(conf * 100),
                 "cycle_id": f"cyc_{rng.randbytes(3).hex()}",
+                "synthetic": True,
             },
+            path=DEMO_AUDIT_LOG_PATH,
         )
         st.session_state[key] = now
 
@@ -240,7 +250,10 @@ def page_settings(settings: dict) -> None:
         paper = st.toggle("Paper mode (sem ordens reais)", value=bool(settings.get("paper_mode", True)))
         max_assets = st.number_input("Max ativos alocados", 1, 10, int(settings.get("max_assets", 3)))
         theme = st.selectbox("Tema", ["dark", "light"], index=0 if settings.get("theme") == "dark" else 1)
-        demo_gen = st.toggle("Demo generator (append audit log)", value=bool(settings.get("demo_generator", True)))
+        demo_gen = st.toggle(
+            "Demo generator (dados sinteticos — grava em audit_log_demo.jsonl, NUNCA no log real)",
+            value=bool(settings.get("demo_generator", False)),
+        )
         mode = st.selectbox("Modo", ["PAPER", "SHADOW", "LIVE", "FLAT"], index=["PAPER", "SHADOW", "LIVE", "FLAT"].index(settings.get("mode", MODE_LABEL)))
         submitted = st.form_submit_button("Salvar configurações")
 

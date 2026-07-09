@@ -13,6 +13,12 @@ if not DATA_DIR.exists():
 
 SETTINGS_PATH = DATA_DIR / "settings.json"
 AUDIT_LOG_PATH = DATA_DIR / "audit_log.jsonl"
+# Log SEPARADO para ticks sinteticos do demo generator — nunca deve entrar no
+# mesmo arquivo de decisoes reais (achado real 2026-07-10: com demo_generator
+# default=True, BUY/SELL/HOLD aleatorios eram gravados no MESMO audit_log.jsonl
+# onde decision_engine.py e continuous_trainer.py gravam decisoes de verdade,
+# ficando indistinguiveis no historico).
+DEMO_AUDIT_LOG_PATH = DATA_DIR / "audit_log_demo.jsonl"
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "refresh_interval_sec": 30,
@@ -20,7 +26,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "paper_mode": True,
     "max_assets": 3,
     "theme": "dark",
-    "demo_generator": True,
+    "demo_generator": False,
     "mode": "PAPER",
     "deriv": {
         "enabled": True,
