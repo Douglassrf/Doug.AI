@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from dashboard.data_store import append_audit_entry, load_settings, read_audit_log, save_settings
+from dashboard.decision_panel import page_decisions
 from dashboard.deriv_panel import page_deriv_demo
 from dashboard.preflight_bridge import (
     get_council_snapshot,
@@ -315,7 +316,7 @@ def main() -> None:
         st.divider()
         page = st.radio(
             "Navegação",
-            ["Overview", "10 Layers", "Operations", "Deriv Demo", "Settings", "Council / Red Team"],
+            ["Overview", "Cérebro (Decisões)", "10 Layers", "Operations", "Deriv Demo", "Settings", "Council / Red Team"],
             label_visibility="collapsed",
         )
         st.divider()
@@ -330,6 +331,8 @@ def main() -> None:
 
     if page == "Overview":
         page_overview(settings, bridge_status)
+    elif page == "Cérebro (Decisões)":
+        page_decisions(settings)
     elif page == "10 Layers":
         page_layers(settings)
     elif page == "Operations":

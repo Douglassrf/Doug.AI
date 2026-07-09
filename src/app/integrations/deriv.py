@@ -18,6 +18,35 @@ from urllib.parse import urlparse
 
 from app.core.config import DerivSettings, settings as default_settings
 
+# Fonte UNICA da verdade para a trava de conta-demo. Reusa a validacao madura
+# de integrations/deriv_demo.py em vez de reimplementar (evita divergencia na
+# trava de seguranca mais critica do projeto). Fallback defensivo se o modulo
+# raiz nao estiver no path do processo FastAPI.
+try:
+    import sys as _sys
+    from pathlib import Path as _Path
+    _root = _Path(__file__).resolve().parents[3]
+    if str(_root) not in _sys.path:
+        _sys.path.insert(0, str(_root))
+    from integrations.deriv_demo import (  # type: ignore
+        DerivNotDemoAccountError as _CanonNotDemo,
+        assert_demo_account as _canon_assert_demo,
+    )
+
+    def _assert_demo_account(auth: dict[str, Any]) -> None:
+        try:
+            _canon_assert_demo(auth)
+        except _CanonNotDemo as exc:
+            raise DerivLivePurchaseBlocked(str(exc)) from exc
+except Exception:  # pragma: no cover - fallback minimo se o import canonico falhar
+    def _assert_demo_account(auth: dict[str, Any]) -> None:
+        loginid = str(auth.get("loginid", ""))
+        is_virtual = auth.get("is_virtual") in (1, True, "1") or loginid.upper().startswith("VRT")
+        if not is_virtual:
+            raise DerivLivePurchaseBlocked(
+                f"Conta REAL detectada (loginid={loginid}). Doug.AI aceita apenas conta DEMO."
+            )
+
 
 class DerivError(RuntimeError):
     """Base Deriv integration error."""
@@ -112,6 +141,13 @@ class DerivClient:
                 auth = ws.recv_json()
                 if auth.get("error"):
                     raise DerivError(str(auth["error"]))
+                # TRAVA DE SEGURANCA CANONICA (nao duplicar!): reusa a mesma
+                # validacao de conta-demo do cliente maduro. Sem isto, este
+                # cliente autorizava qualquer conta — inclusive REAL — sem
+                # bloquear, e a trava mais critica do projeto ficava divergente
+                # entre as duas implementacoes. Agora existe UMA fonte da verdade.
+                if not self.config.live_enabled:
+                    _assert_demo_account(auth.get("authorize", {}))
             ws.send_json(payload)
             response = ws.recv_json()
             if response.get("error"):
