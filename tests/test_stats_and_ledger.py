@@ -8,7 +8,24 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from training import paper_ledger  # noqa: E402
-from training.stats_validation import deflated_sharpe_ratio, expected_max_sharpe  # noqa: E402
+from training.stats_validation import deflated_sharpe_ratio, expected_max_sharpe, pearson_correlation  # noqa: E402
+
+
+class TestPearsonCorrelation:
+    def test_identical_series_are_fully_correlated(self):
+        series = [100.0, 101.0, 99.0, 102.0, 98.0, 103.0]
+        assert pearson_correlation(series, series) > 0.999
+
+    def test_inverse_series_are_fully_anticorrelated(self):
+        a = [100.0, 101.0, 99.0, 102.0, 98.0, 103.0]
+        b = [-x for x in a]
+        assert pearson_correlation(a, b) < -0.999
+
+    def test_short_series_returns_zero(self):
+        assert pearson_correlation([1.0, 2.0], [1.0, 2.0]) == 0.0
+
+    def test_constant_series_returns_zero(self):
+        assert pearson_correlation([5.0] * 10, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]) == 0.0
 
 
 class TestDeflatedSharpeRatio:

@@ -78,6 +78,22 @@ def deflated_sharpe_ratio(
     return _NORMAL.cdf((sharpe - sr0) / se)
 
 
+def pearson_correlation(a: list[float], b: list[float]) -> float:
+    """Correlacao de Pearson entre duas series de mesmo tamanho (alinhadas pelo
+    final — quem chama deve garantir que a[i] e b[i] sao do mesmo instante).
+    Retorna 0.0 se nao da pra calcular (series curtas ou sem variancia)."""
+    n = min(len(a), len(b))
+    if n < 5:
+        return 0.0
+    a, b = a[-n:], b[-n:]
+    mean_a, mean_b = sum(a) / n, sum(b) / n
+    cov = sum((a[i] - mean_a) * (b[i] - mean_b) for i in range(n))
+    var_a = sum((x - mean_a) ** 2 for x in a)
+    var_b = sum((x - mean_b) ** 2 for x in b)
+    denom = math.sqrt(var_a * var_b)
+    return cov / denom if denom > 0 else 0.0
+
+
 def annotate_with_dsr(stats: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Recebe {key: bucket_dict} (cada um com sharpe/skew/kurtosis/trades ja
     calculados) e devolve os mesmos dicts com 'dsr' adicionado — corrigido pelo

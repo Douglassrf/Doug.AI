@@ -178,6 +178,16 @@ def resolve_pending_positions(price_lookup) -> list[dict[str, Any]]:
     return resolved
 
 
+def open_positions() -> list[dict[str, Any]]:
+    """Posicoes paper atualmente abertas (ainda nao resolvidas) — usado pelo
+    dimensionamento ciente de correlacao (decision_engine.py): antes de abrir
+    uma nova OPERAR, olha o que ja esta aberto pra nao dobrar risco em pares
+    que se movem parecido (ex.: BOOM1000 e BOOM500 ao mesmo tempo, no mesmo
+    lado, e sem essa checagem cada um seria dimensionado como se fosse a
+    UNICA aposta em risco, quando na pratica sao duas apostas correlacionadas)."""
+    return _load_json(OPEN_POSITIONS_PATH, [])
+
+
 def is_kill_switch_active() -> bool:
     return bool(_current_equity().get("kill_switch_active", False))
 

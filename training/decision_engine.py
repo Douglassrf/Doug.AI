@@ -78,6 +78,13 @@ MAX_STAKE_PCT = 2.0  # nunca sugerir mais que 2% do capital por operacao
 NEWS_RISK_BLOCK = 0.70
 # Sentimento fortemente contrario ao sinal tambem barra a operacao
 NEWS_BIAS_CONFLICT = 0.30
+# Dimensionamento ciente de correlacao: se ja existe posicao aberta no MESMO
+# lado num par que se move parecido (ex.: BOOM1000 e BOOM500), cada nova
+# OPERAR correlacionada nao e risco independente — e o MESMO risco duas
+# vezes. Corta o stake pela metade por posicao correlacionada ja aberta, em
+# vez de tratar cada par como se fosse a unica aposta em jogo.
+CORRELATION_THRESHOLD = 0.70
+CORRELATION_STAKE_DISCOUNT = 0.5
 
 
 @dataclass
@@ -237,6 +244,42 @@ def _kelly_stake(win_rate: float) -> float:
     """Kelly fracionado p/ payoff 1:1: f = (2*wr - 1) * fracao, com teto duro."""
     kelly = max(0.0, 2.0 * win_rate - 1.0)
     return round(min(kelly * KELLY_FRACTION * 100.0, MAX_STAKE_PCT), 2)
+
+
+def _apply_correlation_discount(
+    pair: str, direction: str, stake_pct: float, closes: list[float], reasons: list[str]
+) -> float:
+    """Reduz o stake se ja existe posicao paper ABERTA, no MESMO lado, num par
+    que se move de forma parecida com este (correlacao de Pearson >= 0.70 nos
+    precos recentes). Sem isto, duas OPERAR simultaneas em pares
+    correlacionados (ex.: BOOM1000 + BOOM500 comprados ao mesmo tempo) sao
+    dimensionadas cada uma como se fosse a UNICA aposta em risco, quando na
+    pratica e o MESMO risco contado duas vezes."""
+    from training.paper_ledger import open_positions
+    from training.stats_validation import pearson_correlation
+
+    same_side_others = {
+        p["pair"] for p in open_positions() if p.get("direction") == direction and p.get("pair") != pair
+    }
+    if not same_side_others:
+        return stake_pct
+
+    discounted = stake_pct
+    correlated_with: list[str] = []
+    for other_pair in same_side_others:
+        other_series = fetch_candles_sync(other_pair, len(closes), 60)
+        other_closes = [c["close"] for c in other_series if c.get("close")]
+        corr = pearson_correlation(closes, other_closes)
+        if corr >= CORRELATION_THRESHOLD:
+            discounted *= CORRELATION_STAKE_DISCOUNT
+            correlated_with.append(f"{other_pair} (corr {corr:.2f})")
+
+    if correlated_with:
+        reasons.append(
+            f"📐 CORRELACAO: posicao ja aberta e correlacionada em {', '.join(correlated_with)} — "
+            f"stake reduzido de {stake_pct}% para {round(discounted, 2)}% pra nao dobrar o mesmo risco."
+        )
+    return round(discounted, 2)
 
 
 def decide_pair(
@@ -421,6 +464,7 @@ def decide_pair(
                     "com o Playbook ainda aprovando no agregado historico."
                 )
             else:
+                d.stake_pct = _apply_correlation_discount(pair, d.direction, d.stake_pct, closes, d.reasons)
                 record_open_position(
                     pair=pair, scenario=scenario, strategy_id=best_bucket_strategy,
                     direction=d.direction, entry=price, stake_pct=d.stake_pct,
