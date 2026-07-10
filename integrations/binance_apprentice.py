@@ -32,6 +32,7 @@ BINANCE_TESTNET_REST = "https://testnet.binance.vision"
 BINANCE_MAINNET_REST = "https://api.binance.com"
 
 from training.pair_universe import BINANCE_PAIRS_100 as APPRENTICE_PAIRS
+from integrations import money_guard
 
 
 class BinanceError(RuntimeError):
@@ -107,10 +108,13 @@ class BinanceApprenticeClient:
         headers = {"User-Agent": "Doug.AI-Apprentice/1.0"}
 
         if signed:
-            if not self.config.live_enabled and not self.config.use_testnet:
-                raise BinanceLiveBlocked(
-                    "Conta live Binance bloqueada. Use BINANCE_USE_TESTNET=true para aprendizes."
-                )
+            # Defesa em profundidade: chamada assinada em MAINNET passa pelo
+            # cofre (kill switch + live habilitado). Testnet é livre (fake money).
+            if not self.config.use_testnet:
+                try:
+                    money_guard.assert_mainnet_allowed(live_enabled=self.config.live_enabled)
+                except money_guard.MoneyGuardError as exc:
+                    raise BinanceLiveBlocked(str(exc)) from exc
             if not self.config.api_key or not self.config.api_secret:
                 raise BinanceError("BINANCE_API_KEY e BINANCE_API_SECRET necessarios para chamadas assinadas")
             params["timestamp"] = int(time.time() * 1000)
