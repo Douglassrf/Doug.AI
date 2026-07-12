@@ -23,6 +23,7 @@ try:
 except ImportError:
     pass
 
+from integrations.deriv_demo import RealAccountDetectedAbort  # noqa: E402
 from training.backtester import (  # noqa: E402
     BACKTEST_SCORECARD_PATH,
     run_backtest,
@@ -95,4 +96,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except RealAccountDetectedAbort as exc:
+        print(f"\n🛑 ABORT DE SEGURANCA — processo interrompido: {exc}\n")
+        raise SystemExit(1)

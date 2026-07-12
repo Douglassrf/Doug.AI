@@ -15,6 +15,8 @@ from typing import Any
 
 import websockets
 
+from integrations import money_guard
+
 DERIV_WS_BASE = "wss://ws.derivws.com/websockets/v3"
 DEFAULT_APP_ID = 1089
 DEFAULT_SYMBOLS = ("R_100", "cryBTCUSD")
@@ -39,6 +41,16 @@ class DerivLiveNotEnabledError(DerivDemoError):
 
 class DerivAuthError(DerivDemoError):
     """Raised when authorization fails."""
+
+
+class RealAccountDetectedAbort(Exception):
+    """Fatal fail-safe: a real (non-demo) Deriv account was detected while the
+    mission certification gates are not met (DerivLiveGate.check().allowed is
+    False). Deliberately NOT a subclass of DerivDemoError, so generic
+    exception handlers in this module do not swallow it -- it must propagate
+    and crash the calling script, per the security requirement that a real
+    account in a test/demo flow aborts the process immediately, independent
+    of any config flag."""
 
 
 @dataclass
@@ -101,13 +113,22 @@ def _is_demo_account(auth: dict[str, Any]) -> bool:
 
 
 def assert_demo_account(auth: dict[str, Any]) -> None:
-    """Hard-fail if authorize payload is not a virtual/demo account."""
+    """Aborta o processo se o payload de authorize não for conta demo/virtual.
+
+    Aciona o kill switch (money_guard) e levanta RealAccountDetectedAbort --
+    que não é capturado pelos except genéricos deste módulo -- para que o
+    script que chamou isto pare imediatamente, em vez de seguir com um erro
+    "silencioso" registrado só em JSON de status.
+    """
     if not _is_demo_account(auth):
         loginid = auth.get("loginid", "?")
-        raise DerivNotDemoAccountError(
-            f"Conta REAL detectada (loginid={loginid}). "
-            "Doug.AI aceita apenas contas DEMO/virtual. "
-            "Gere um token na conta demo em home.deriv.com."
+        why = f"Conta REAL detectada (loginid={loginid}) em fluxo Deriv sem gates certificados"
+        money_guard.trip(why)
+        raise RealAccountDetectedAbort(
+            f"ABORT: {why}. Doug.AI só aceita contas DEMO/virtual enquanto os gates de "
+            "missão (SmallCapitalReadinessGate, HumanSupervisedMicroLive, Certificação GO) "
+            "não estiverem certificados. Kill switch acionado (data/KILL) -- revise "
+            "manualmente antes de chamar integrations.money_guard.reset()."
         )
 
 
@@ -148,8 +169,14 @@ class DerivLiveGateStatus:
 class DerivLiveGate:
     """Gate for official/live Deriv — never auto-enables live trading.
 
-    Phase 2 stub: checks env flags and documents required mission gates.
+    Fail-safe hard-coded: MISSION_GATES_CERTIFIED é uma constante fixa no
+    código-fonte, não lida de env/config nenhuma. Enquanto ela for False,
+    NENHUMA combinação de variáveis de ambiente consegue fazer check().allowed
+    retornar True -- o desbloqueio só pode vir de uma mudança de código
+    revisada (subir esta constante), nunca de uma flag de runtime.
     """
+
+    MISSION_GATES_CERTIFIED = False
 
     REQUIRED_GATES = (
         "SmallCapitalReadinessGate",
@@ -161,6 +188,18 @@ class DerivLiveGate:
         load_config()  # ensure .env loaded
 
     def check(self) -> DerivLiveGateStatus:
+        if money_guard.is_killed():
+            return DerivLiveGateStatus(
+                allowed=False,
+                reason=f"🛑 KILL SWITCH ativo — motivo: {money_guard.kill_reason() or 'manual'}",
+                gates_pending=list(self.REQUIRED_GATES),
+            )
+        if not self.MISSION_GATES_CERTIFIED:
+            return DerivLiveGateStatus(
+                allowed=False,
+                reason="Portões de missão ainda não certificados neste build (hard-coded).",
+                gates_pending=list(self.REQUIRED_GATES),
+            )
         if not is_doug_live_mode():
             return DerivLiveGateStatus(
                 allowed=False,
@@ -174,9 +213,9 @@ class DerivLiveGate:
                 gates_pending=list(self.REQUIRED_GATES),
             )
         return DerivLiveGateStatus(
-            allowed=False,
-            reason="Portões de missão ainda não certificados neste build.",
-            gates_pending=list(self.REQUIRED_GATES),
+            allowed=True,
+            reason="Gates certificados, DOUG_MODE=live e DERIV_LIVE_ENABLED=true.",
+            gates_pending=[],
         )
 
     def assert_live_allowed(self) -> None:
@@ -277,9 +316,11 @@ class DerivDemoClient:
         if not auth:
             raise DerivAuthError("Empty authorize response")
 
-        if is_doug_live_mode():
-            DerivLiveGate().assert_live_allowed()
-        else:
+        # Fail-safe hard-coded, independente de DOUG_MODE/DERIV_LIVE_ENABLED: a
+        # checagem de conta demo roda SEMPRE, e só é dispensada quando os
+        # gates de missão estiverem certificados (DerivLiveGate.check().allowed)
+        # -- hoje, nunca, porque a certificação ainda não foi implementada.
+        if not DerivLiveGate().check().allowed:
             assert_demo_account(auth)
 
         self._account = DerivAccountInfo(
@@ -400,10 +441,10 @@ class DerivDemoClient:
                 candles=candles,
                 paper_signals=paper_signals,
             )
-        except DerivNotDemoAccountError as exc:
-            return DerivSnapshot(connected=False, account=None, error=str(exc))
         except (DerivDemoError, DerivAuthError, asyncio.TimeoutError, OSError) as exc:
             return DerivSnapshot(connected=False, account=None, error=str(exc))
+        # RealAccountDetectedAbort NÃO é capturado aqui de propósito -- deve
+        # propagar e derrubar o processo chamador (fail-safe de segurança).
 
 
 def _append_audit(path: Path, event_type: str, payload: dict[str, Any]) -> None:

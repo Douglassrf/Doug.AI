@@ -28,6 +28,7 @@ try:
 except ImportError:
     pass
 
+from integrations.deriv_demo import RealAccountDetectedAbort  # noqa: E402
 from training.decision_engine import decide_many  # noqa: E402
 from training.pair_universe import DERIV_PAIRS_100 as ALL_PAIRS  # noqa: E402
 
@@ -81,4 +82,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except RealAccountDetectedAbort as exc:
+        print(f"\n🛑 ABORT DE SEGURANCA — processo interrompido: {exc}\n")
+        raise SystemExit(1)

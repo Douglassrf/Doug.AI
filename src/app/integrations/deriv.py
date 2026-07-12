@@ -29,16 +29,26 @@ try:
     if str(_root) not in _sys.path:
         _sys.path.insert(0, str(_root))
     from integrations.deriv_demo import (  # type: ignore
-        DerivNotDemoAccountError as _CanonNotDemo,
+        DerivLiveGate as _CanonLiveGate,
+        RealAccountDetectedAbort as _CanonRealAccountAbort,
         assert_demo_account as _canon_assert_demo,
     )
+
+    def _gate_allows_live() -> bool:
+        return _CanonLiveGate().check().allowed
 
     def _assert_demo_account(auth: dict[str, Any]) -> None:
         try:
             _canon_assert_demo(auth)
-        except _CanonNotDemo as exc:
-            raise DerivLivePurchaseBlocked(str(exc)) from exc
+        except _CanonRealAccountAbort as exc:
+            # Propaga como abort fatal (nao um DerivError comum) -- este
+            # cliente tambem deve derrubar o processo, nao so bloquear a
+            # compra. Ver integrations/deriv_demo.py:RealAccountDetectedAbort.
+            raise exc
 except Exception:  # pragma: no cover - fallback minimo se o import canonico falhar
+    def _gate_allows_live() -> bool:
+        return False
+
     def _assert_demo_account(auth: dict[str, Any]) -> None:
         loginid = str(auth.get("loginid", ""))
         is_virtual = auth.get("is_virtual") in (1, True, "1") or loginid.upper().startswith("VRT")
@@ -142,11 +152,14 @@ class DerivClient:
                 if auth.get("error"):
                     raise DerivError(str(auth["error"]))
                 # TRAVA DE SEGURANCA CANONICA (nao duplicar!): reusa a mesma
-                # validacao de conta-demo do cliente maduro. Sem isto, este
-                # cliente autorizava qualquer conta — inclusive REAL — sem
-                # bloquear, e a trava mais critica do projeto ficava divergente
-                # entre as duas implementacoes. Agora existe UMA fonte da verdade.
-                if not self.config.live_enabled:
+                # validacao de conta-demo do cliente maduro. Fail-safe hard-
+                # coded: a checagem so e dispensada quando o DerivLiveGate
+                # canonico (deriv_demo.py) disser allowed=True -- hoje, nunca,
+                # porque os gates de missao nao estao certificados. Antes isto
+                # dependia so de self.config.live_enabled, uma flag de runtime
+                # que qualquer .env mal configurado poderia flipar sem passar
+                # pelos 3 gates de certificacao.
+                if not _gate_allows_live():
                     _assert_demo_account(auth.get("authorize", {}))
             ws.send_json(payload)
             response = ws.recv_json()
