@@ -130,7 +130,7 @@ class BucketStats:
         }
 
 
-async def _fetch_candles(symbol: str, count: int, granularity: int) -> list[dict[str, Any]]:
+async def _fetch_candles(symbol: str, count: int, granularity: int, end: int | str = "latest") -> list[dict[str, Any]]:
     _, app_id = load_config()
     app_id = app_id or DEFAULT_APP_ID
     async with websockets.connect(_ws_url(app_id, live=False), open_timeout=20) as ws:
@@ -139,7 +139,7 @@ async def _fetch_candles(symbol: str, count: int, granularity: int) -> list[dict
                 {
                     "ticks_history": symbol,
                     "count": count,
-                    "end": "latest",
+                    "end": end,
                     "style": "candles",
                     "granularity": granularity,
                     "req_id": 1,
@@ -159,10 +159,15 @@ async def _fetch_candles(symbol: str, count: int, granularity: int) -> list[dict
         ]
 
 
-def fetch_candles_sync(symbol: str, count: int = 500, granularity: int = 60) -> list[dict[str, Any]]:
-    """Busca candles reais (publico, sem token). Lista vazia em caso de erro."""
+def fetch_candles_sync(symbol: str, count: int = 500, granularity: int = 60, end: int | str = "latest") -> list[dict[str, Any]]:
+    """Busca candles reais (publico, sem token). Lista vazia em caso de erro.
+
+    `end` aceita "latest" (padrao, comportamento original) ou um epoch Unix
+    especifico -- usado por training/trade_efficiency.py para reconstruir a
+    janela de candles de um trade JA FECHADO (MFE/MAE), sem afetar nenhum dos
+    chamadores existentes que so pedem os candles mais recentes."""
     try:
-        return asyncio.run(_fetch_candles(symbol, count, granularity))
+        return asyncio.run(_fetch_candles(symbol, count, granularity, end))
     except Exception:
         return []
 

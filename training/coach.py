@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from training.strategies import STRATEGIES, StrategySpec
+from training.strategy_trend import MIN_SAMPLES_FOR_TREND, bucket_trend
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("DOUG_DATA_DIR", ROOT / "data"))
@@ -18,6 +19,7 @@ WISDOM_PATH = TRAINING_DIR / "wisdom.json"
 LESSONS_PATH = TRAINING_DIR / "lessons.jsonl"
 COACH_STATE_PATH = TRAINING_DIR / "coach_state.json"
 PLAYBOOK_PATH = TRAINING_DIR / "playbook.json"  # vantagens comprovadas (produto real)
+PAPER_LEDGER_PATH = TRAINING_DIR / "paper_trades.jsonl"  # mesmo arquivo de training/paper_ledger.py
 
 # Scenario → strategies that SHOULD work (curriculum truth)
 SCENARIO_BEST_PRACTICE: dict[str, tuple[str, ...]] = {
@@ -370,9 +372,67 @@ class TrainingCoach:
                 return d
         return None
 
+    def _check_bucket_trends(self) -> list[Lesson]:
+        """Alerta precoce de tendencia de declinio por bucket (estrategia+par+
+        cenario), via regressao linear sobre o historico cronologico REAL de
+        pnl_pct em data/training/paper_trades.jsonl (decisoes OPERAR ja
+        resolvidas ao vivo, nao dado de treino/backtest).
+
+        Complementa (nao substitui) o julgamento por limiar absoluto acima
+        (LOSING_BAR com MIN_TRADES_FOR_JUDGMENT): a inclinacao pode ficar
+        negativa bem antes do win rate absoluto cruzar 0.45 -- validado por
+        simulacao walk-forward contra data/training/sessions.jsonl (buckets
+        rotulados "declining" na 1a metade do historico tiveram win rate medio
+        de 35.9% na 2a metade, fora da amostra, contra 62.8% dos "stable")."""
+        if not PAPER_LEDGER_PATH.exists():
+            return []
+        try:
+            lines = PAPER_LEDGER_PATH.read_text(encoding="utf-8").strip().splitlines()
+        except OSError:
+            return []
+
+        by_bucket: dict[tuple[str, str, str], list[float]] = {}
+        for line in lines:
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            key = (row.get("strategy_id", ""), row.get("pair", ""), row.get("scenario", ""))
+            pnl = row.get("pnl_pct")
+            if pnl is None or not all(key):
+                continue
+            by_bucket.setdefault(key, []).append(float(pnl))
+
+        lessons: list[Lesson] = []
+        for (sid, pair, scenario), history in by_bucket.items():
+            if len(history) < MIN_SAMPLES_FOR_TREND:
+                continue
+            trend = bucket_trend(history)
+            if trend["label"] != "declining":
+                continue
+            student = self.students.get(sid)
+            if student:
+                student.remedial = True
+                if scenario not in student.weak_scenarios:
+                    student.weak_scenarios.append(scenario)
+            lesson = Lesson(
+                "trend_warning",
+                f"TENDENCIA [{sid}]: performance real de {sid} em {pair}/{scenario} esta em "
+                f"declinio (inclinacao {trend['slope']:+.4f} nos ultimos {trend['samples']} trades "
+                "resolvidos) -- ainda pode estar acima do limiar absoluto de problema, mas a "
+                "direcao e ruim. Alerta precoce, antes do veredito protetor.",
+                strategy_id=sid,
+                scenario=scenario,
+                pair=pair,
+            )
+            lessons.append(lesson)
+            self._log_lesson(lesson)
+        return lessons
+
     def review_cycle(self, cycle_wr: float, leaderboard_stats: dict[str, dict[str, Any]]) -> list[Lesson]:
         """End-of-cycle: detect degradation, update wisdom, assign class focus."""
         lessons: list[Lesson] = []
+        lessons.extend(self._check_bucket_trends())
         self.recent_cycle_wr.append(cycle_wr)
 
         # So intervem em problema REAL: estrategia que PERDE (wr < 0.45) com
