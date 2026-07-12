@@ -19,12 +19,13 @@ python -m venv .venv
 
 pip install -r requirements.txt
 
-# Run tests (primary suite — latest snapshot)
-cd latest/doug_os
+# Run tests (official suite — see docs/ARQUITETURA_EXECUCAO.md)
 pytest -q
 ```
 
-Phase-specific tests live under `fase_*/` (e.g. `fase_omega_final/`). Each phase has its own `requirements.txt` if you need isolated runs.
+Fluxo de produção real e regras de arquitetura: [`docs/ARQUITETURA_EXECUCAO.md`](docs/ARQUITETURA_EXECUCAO.md).
+Código histórico das missões antigas (snapshots duplicados, sem uso em produção) foi movido
+para `archive/legacy_missions/` — não é importado por nada vivo e não deve receber código novo.
 
 ## Dashboard (local — recomendado no Windows)
 
@@ -65,7 +66,6 @@ Open **http://localhost:8501** in your browser.
 | `data/deriv_status.json` | Último snapshot Deriv (saldo, ticks, candles) |
 | `scripts/run_preflight_demo.py` | Optional CLI demo log generator |
 | `scripts/test_deriv_demo.py` | Teste de conexão Deriv demo |
-| `fase_xxii_cognitive_trading_loop/` | Cognitive Trading Loop: memória epistêmica SQLite, validação por similaridade, evolução genética controlada e supervisor de proteção para paper/shadow trading. |
 
 Detached mode: `docker compose up -d --build` · Stop: `docker compose down`
 
