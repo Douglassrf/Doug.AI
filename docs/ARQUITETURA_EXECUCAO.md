@@ -43,8 +43,17 @@ módulo `doug_os.tests.*` entre as 12 cópias, e `ModuleNotFoundError` por falta
 algum dia for necessário reviver algo de lá, mova o arquivo específico de volta para a árvore
 viva e adicione um teste — não importe direto de dentro de `archive/`.
 
-Outras 6 pastas `fase_*` (`fase_final_trading_operating_system`, `fase_xvi_alpha_generation`,
+**Atualização — as outras 6 pastas `fase_*` foram auditadas e arquivadas depois.**
+`fase_final_trading_operating_system`, `fase_xvi_alpha_generation`,
 `fase_xvii_predictive_intelligence`, `fase_xviii_quantum_trading_intelligence`,
-`fase_xix_meta_cognitive_trading`, `fase_xxi_evolutionary_trading_intelligence`) não foram
-auditadas nesta rodada e permanecem como estavam — não causam erro de coleção hoje, então
-ficaram fora do escopo desta limpeza.
+`fase_xix_meta_cognitive_trading` e `fase_xxi_evolutionary_trading_intelligence` (60
+missões, 258-317) foram lidas integralmente numa auditoria posterior: zero import vivo
+confirmado, e o que tinha matemática real por trás (não fachada estatística via hash
+determinístico) foi extraído e reimplementado do zero para os dados reais do projeto —
+`training/strategy_trend.py` (de mission_309) e `training/trade_efficiency.py` (de
+mission_262), ambos validados por simulação walk-forward antes de integrar. Os outros 10
+candidatos avaliados (268, 316, 292, 290, 260, 270, 278, 279, 310, 314) e os 4 "gates de
+certificação" (300, 303, 306, 317) foram rejeitados com justificativa concreta — a maior
+parte porque `training/stats_validation.py` (DSR) já é estatisticamente mais rigoroso do
+que o que essas missões ofereciam. As 6 pastas foram movidas para
+`archive/legacy_missions/` (mesmo tratamento das outras 4 árvores acima).
